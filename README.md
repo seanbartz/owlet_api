@@ -114,6 +114,26 @@ The decoder can also be run directly if you only want CSV output:
 $ python3 decode_owlet_attributes.py red_alert_history.json --prefix red_alert_history
 ```
 
+### Web App: Secure Credentials + 24-Hour Graphs
+You can run a local web app that accepts your Owlet email/password via a POST form,
+downloads `RED_ALERT_SUMMARY` history, and displays:
+* heart rate vs time
+* oxygen level vs time
+
+The form includes an optional checkbox to restrict displayed samples to the past 24 hours.
+
+Start the app:
+```
+$ owlet-web
+ * Running on http://127.0.0.1:5000
+```
+Set `FLASK_DEBUG=1` to run the local server in debug mode.
+
+Then open `http://127.0.0.1:5000` in your browser, submit your credentials, and
+view the graphs.
+This command starts Flask's built-in development server for local use.
+For production deployment, use a WSGI server.
+
 ### Python
 You can take the [CLI implementation](owlet_api/cli.py) as reference. A basic example:
 ```

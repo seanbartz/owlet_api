@@ -30,14 +30,15 @@ setup(name = name,
         install_requires = [
             'requests',
             'python-dateutil',
-            'argparse'
+            'argparse',
+            'Flask'
         ],
         entry_points = {
             'console_scripts': [
                 'owlet=owlet_api.cli:cli',
+                'owlet-web=owlet_api.web_app:run',
             ]
         },
         test_suite = 'tests',
         include_package_data = True,
 )
-
