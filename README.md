@@ -16,6 +16,9 @@ TIMESTAMP;DSN;AGE_MONTHS_OLD;ALRTS_DISABLED;ALRT_SNS_BLE;ALRT_SNS_YLW;APP_ACTIVE
 * python-dateutil
 * argparse
 
+Optional for plotting:
+* matplotlib
+
 ## Usage
 The easiest way to access data from the Owlet is via our command line interface (CLI). 
 
@@ -23,8 +26,9 @@ The easiest way to access data from the Owlet is via our command line interface 
 Here is the build-in help:
 ```
 usage: owlet [-h] [--device DEVICE] [--stream ATTRIBUTES] [--timeout TIMEOUT]
-             email password {token,devices,attributes,stream,download}
-             [{token,devices,attributes,stream,download} ...]
+             [--history-property HISTORY_PROPERTY] [--limit LIMIT]
+             email password {token,devices,attributes,stream,download,history}
+             [{token,devices,attributes,stream,download,history} ...]
 owlet: error: the following arguments are required: email, password, actions
 ```
 
@@ -57,11 +61,57 @@ $ owlet email@email.org password stream
 TIMESTAMP;DSN;AGE_MONTHS_OLD;ALRTS_DISABLED;ALRT_SNS_BLE;ALRT_SNS_YLW;APP_ACTIVE;AVERAGE_DATA;BABY_NAME;BASE_STATION_ON;BATT_LEVEL;BIRTHDATE;BLE_MAC_ID;BLE_RSSI;CHARGE_STATUS;CRIT_BATT_ALRT;CRIT_OX_ALRT;DEVICE_PING;DISABLE_LOGGED_DATA;ELEVATION;GENDER;HEART_RATE;HIGH_HR_ALRT;LATITUDE;LIVE_DATA_STREAM;LOCAL_BLE_MAC_ID;LOGGED_DATA_CACHE;LONGITUDE;LOW_BATT_ALRT;LOW_BATT_PRCNT;LOW_HR_ALRT;LOW_INTEG_READ;LOW_OX_ALRT;LOW_PA_ALRT;MOVEMENT;NURSERY_MODE;oem_base_version;oem_sock_version;ON_BOARDING;OTA_ERROR;OTA_STATUS;OXYGEN_LEVEL;PREMATURE;SHARE_DATA;SOCK_CONNECTION;SOCK_DISCON_ALRT;SOCK_DIS_APP_PREF;SOCK_DIS_NEST_PREF;SOCK_OFF;SOCK_REC_PLACED;
 ```
 
-Download the `LOGGED_DATA_CACHE` (of currently unknown format):
+Download the `LOGGED_DATA_CACHE` / `VITALS_LOG_FILE` payload as raw bytes:
 ```
-owlet email@email.org password download
-��8;������������M=���N@����:���R>����7����9���W:���X<��Z>���\H���_K����@����B����
-...
+$ owlet email@email.org password download > logged_data.raw
+```
+
+Fetch historical datapoints for a property such as `RED_ALERT_SUMMARY`:
+```
+$ owlet email@email.org password history --history-property RED_ALERT_SUMMARY --limit 50 > red_alert_history.json
+```
+
+### Red Alert History and Plotting
+The most useful reverse-engineered workflow in this repo is now `RED_ALERT_SUMMARY` history decoding.
+
+`RED_ALERT_SUMMARY` history can be downloaded from Ayla, decoded into heart-rate / oxygen samples, timestamped at 10-second spacing, and plotted as line charts in EDT.
+
+Use the standalone script:
+```
+$ python3 download_red_alert_history.py --limit 50 --prefix red_alert_history
+Owlet email: email@email.org
+Owlet password:
+Decoded rows: 262
+Wrote raw history: red_alert_history.json
+Wrote CSV: red_alert_history_red_alert_summary.csv
+Wrote heart-rate plot: red_alert_history_heart_rate.png
+Wrote oxygen plot: red_alert_history_oxygen.png
+```
+
+This script:
+* prompts for email and password securely
+* downloads `RED_ALERT_SUMMARY` datapoint history
+* writes the raw JSON history to disk
+* decodes each summary into per-sample heart rate and oxygen values
+* infers per-sample timestamps from the embedded summary start time
+* writes a CSV with both summary update timestamps and corrected per-sample timestamps
+* saves line plots of heart rate vs time and oxygen vs time in EDT
+
+Important output columns in `red_alert_history_red_alert_summary.csv`:
+* `sample_timestamp_utc`: inferred per-sample UTC timestamp
+* `sample_timestamp_local`: inferred per-sample local timestamp in `America/New_York`
+* `sample_time_local`: local time only, without date
+* `summary_timestamp_utc`: Ayla property update time for that summary
+* `summary_timestamp_local`: local version of the summary update time
+
+If you already have a saved history download and just want to reprocess it:
+```
+$ python3 download_red_alert_history.py --input-json red_alert_history.json --prefix red_alert_history_check
+```
+
+The decoder can also be run directly if you only want CSV output:
+```
+$ python3 decode_owlet_attributes.py red_alert_history.json --prefix red_alert_history
 ```
 
 ### Python
@@ -123,6 +173,7 @@ for device in api.get_devices():
 | LOW_INTEG_READ      | Low Integrity Read    | 0              | Unknown
 | LOW_OX_ALRT         | Low Oxygen Alert      | 0              | Low Oxygen Alert
 | LOW_PA_ALRT         | Low Pa Alert          | 0              | Unknown
+| MONITORING_SUMMARY  | Monitoring Summary    | Base64 payload | 10-minute monitoring summary blocks; currently decoded as timestamps plus summary/status bytes, not direct HR/O2 samples
 | MOVEMENT            | Baby Movement         | 1              | Is baby moving?
 | NURSERY_MODE        | Nursery Mode          | 0              | Unknown
 | oem_base_version    | oem_base_version      | M2_2_0_0_a078  | Unknown
@@ -132,6 +183,7 @@ for device in api.get_devices():
 | OTA_STATUS          | OTA Status            | 0              | Unknown
 | OXYGEN_LEVEL        | Oxygen Level          | 96             | Baby's Oxygen Level
 | PREMATURE           | Premature             | None           | Unknown
+| RED_ALERT_SUMMARY   | Red Alert Summary     | Base64 payload | Decoded into per-sample heart rate and oxygen values at approximately 10-second spacing
 | SHARE_DATA          | Share Data            | None           | Unknown
 | SOCK_CONNECTION     | Sock Connection       | 1              | Connection to sock available
 | SOCK_DISCON_ALRT    | Sock Disconnect Alert | 0              | Sock disconnected alert
