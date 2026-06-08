@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Helpers for downloading and decoding RED_ALERT_SUMMARY history."""
 
-from decode_owlet_attributes import decode_red_alert_summary
-from decode_owlet_attributes import extract_json_payloads
-
+from .red_alert_decoder import decode_red_alert_summary
+from .red_alert_decoder import extract_json_payloads
 from .owletapi import OwletAPI
 
 

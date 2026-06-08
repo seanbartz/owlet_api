@@ -13,7 +13,6 @@ setup(name = name,
         author = 'Wolf-Bastian Pöttner',
         author_email = 'bastian+owlet@poettner.de',
         packages = ['owlet_api'],
-        py_modules = ['decode_owlet_attributes', 'download_red_alert_history'],
         url = 'https://github.com/BastianPoe/owlet_api/',
         license = 'MIT',
         classifiers = [
