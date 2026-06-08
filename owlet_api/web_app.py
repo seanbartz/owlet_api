@@ -7,8 +7,8 @@ import math
 from flask import Flask, render_template_string, request
 from markupsafe import Markup
 
-from download_red_alert_history import decode_histories
-from download_red_alert_history import download_history
+from .red_alert_history import decode_histories
+from .red_alert_history import download_history
 
 
 HTML_TEMPLATE = """
@@ -218,8 +218,11 @@ def create_app():
                             "Oxygen Level vs Time",
                             "#0f9d58",
                         )
-                except Exception as exc:
-                    error = f"Unable to download red alert history: {exc}"
+                except Exception:
+                    error = (
+                        "Unable to download red alert history right now. "
+                        "Please verify your credentials and try again."
+                    )
 
         return render_template_string(
             HTML_TEMPLATE,
