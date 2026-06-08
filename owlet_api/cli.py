@@ -2,6 +2,7 @@
 """Command Line Interface for OwletAPI."""
 
 import argparse
+import json
 import time
 import sys
 from owlet_api.owletapi import OwletAPI
@@ -20,13 +21,18 @@ def cli():
     parser.add_argument('password', help='Specify Password')
     parser.add_argument('actions', help='Specify the actions', nargs='+',
                         choices=["token", "devices", "attributes",
-                                 "stream", 'download'])
+                                 "stream", 'download', 'history'])
     parser.add_argument('--device', dest='device',
                         help='Specify DSN for device filter')
     parser.add_argument('--stream', dest='attributes', action='append',
                         help='Specify attributes for stream filter')
     parser.add_argument('--timeout', dest='timeout',
                         help='Specify streaming timeout in seconds')
+    parser.add_argument('--history-property', dest='history_property',
+                        default='RED_ALERT_SUMMARY',
+                        help='Property to fetch with the history action')
+    parser.add_argument('--limit', dest='limit', type=int,
+                        help='Maximum datapoints to request with history')
     # Parse arguments
     args = parser.parse_args()
 
@@ -78,7 +84,15 @@ def cli():
         for device in api.get_devices():
             if args.device is None or args.device == device.dsn:
                 device.update()
-                print(device.download_logged_data())
+                sys.stdout.buffer.write(device.download_logged_data_bytes())
+
+    if "history" in args.actions:
+        for device in api.get_devices():
+            if args.device is None or args.device == device.dsn:
+                device.update()
+                datapoints = device.get_property_datapoints(
+                    args.history_property, args.limit)
+                print(json.dumps(datapoints, indent=2, default=str))
 
     # Stream Attributes
     if "stream" in args.actions:

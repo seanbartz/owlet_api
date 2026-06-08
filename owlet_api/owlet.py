@@ -380,8 +380,8 @@ class Owlet():
         """Get interval in seconds when new data is available."""
         return self.update_interval
 
-    def download_logged_data(self):
-        """Download "LOGGED_DATA_CACHE", content currently unknown."""
+    def download_logged_data_bytes(self):
+        """Download "LOGGED_DATA_CACHE" as bytes, content currently unknown."""
         if not self.properties:
             raise OwletNotInitializedException(
                 'Initialize first - no properties')
@@ -435,4 +435,55 @@ class Owlet():
             raise OwletTemporaryCommunicationException(
                 'Download Request failed - status code')
 
-        return result.text
+        return result.content
+
+    def download_logged_data(self):
+        """Download "LOGGED_DATA_CACHE", content currently unknown."""
+        result = self.download_logged_data_bytes()
+        return result.decode(errors='replace')
+
+    def get_property_datapoints(self, property_name, limit=None):
+        """Get historical datapoints for a named property, if retained by Ayla."""
+        if not self.properties:
+            raise OwletNotInitializedException(
+                'Initialize first - no properties')
+
+        if property_name not in self.properties:
+            raise OwletNotInitializedException(
+                'Initialize first - missing property')
+
+        datapoints_url = self.owlet_api.base_properties_url + \
+            'properties/{}/datapoints.json'.format(
+                self.properties[property_name].key)
+        fallback_url = self.owlet_api.base_properties_url + \
+            'properties/{}/datapoints'.format(
+                self.properties[property_name].key)
+        datapoints_headers = self.owlet_api.get_request_headers()
+        params = {}
+        if limit is not None:
+            params['limit'] = limit
+
+        for url in (datapoints_url, fallback_url):
+            try:
+                result = requests.get(
+                    url,
+                    headers=datapoints_headers,
+                    params=params,
+                    timeout=5
+                )
+            except RequestException:
+                raise OwletTemporaryCommunicationException(
+                    'Datapoints request failed - no answer')
+
+            if result.status_code == 200:
+                break
+
+        if result.status_code != 200:
+            raise OwletTemporaryCommunicationException(
+                'Datapoints request failed - return code')
+
+        try:
+            return result.json()
+        except JSONDecodeError:
+            raise OwletTemporaryCommunicationException(
+                'Datapoints request failed - JSON invalid')
