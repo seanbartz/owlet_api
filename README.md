@@ -116,10 +116,11 @@ $ python3 decode_owlet_attributes.py red_alert_history.json --prefix red_alert_h
 
 ### Web App: Secure Credentials + 24-Hour Graphs
 You can run a local web app that accepts your Owlet email/password via a POST form,
-downloads `RED_ALERT_SUMMARY` history, filters decoded samples to the past 24 hours,
-and displays:
+downloads `RED_ALERT_SUMMARY` history, and displays:
 * heart rate vs time
 * oxygen level vs time
+
+The form includes an optional checkbox to restrict displayed samples to the past 24 hours.
 
 Start the app:
 ```

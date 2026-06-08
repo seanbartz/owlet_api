@@ -35,7 +35,7 @@ HTML_TEMPLATE = """
   </style>
 </head>
 <body>
-  <h1>Owlet Red Alert (Past 24 Hours)</h1>
+  <h1>Owlet Red Alert Viewer</h1>
   <p>Credentials are submitted with POST and only used in-memory for this request.</p>
   {% if error %}
     <div class="error">{{ error }}</div>
@@ -57,12 +57,16 @@ HTML_TEMPLATE = """
       Max datapoints to fetch
       <input type="number" min="1" max="1000" name="limit" value="{{ limit }}">
     </label>
+    <label>
+      <input type="checkbox" name="restrict_24h" value="on" {% if restrict_24h %}checked{% endif %}>
+      Restrict to the last 24 hours
+    </label>
     <button type="submit">Download & Plot</button>
   </form>
 
   {% if has_results %}
     <div class="meta">
-      Showing {{ sample_count }} decoded samples from the past 24 hours.
+      Showing {{ sample_count }} decoded samples{{ ' from the past 24 hours' if restrict_24h else '' }}.
     </div>
     <div class="chart">{{ heart_rate_svg }}</div>
     <div class="chart">{{ oxygen_svg }}</div>
@@ -190,11 +194,13 @@ def create_app():
         email = ""
         device_dsn = ""
         limit = 300
+        restrict_24h = True
 
         if request.method == "POST":
             email = request.form.get("email", "").strip()
             password = request.form.get("password", "")
             device_dsn = request.form.get("device_dsn", "").strip()
+            restrict_24h = request.form.get("restrict_24h") == "on"
             try:
                 limit = int(request.form.get("limit", "300"))
             except ValueError:
@@ -207,18 +213,24 @@ def create_app():
                 try:
                     histories = download_history(email, password, limit, device_dsn or None)
                     rows = decode_histories(histories)
-                    recent_rows = _within_last_24_hours(rows, datetime.now(timezone.utc))
-                    sample_count = len(recent_rows)
+                    displayed_rows = (
+                        _within_last_24_hours(rows, datetime.now(timezone.utc))
+                        if restrict_24h else rows
+                    )
+                    sample_count = len(displayed_rows)
                     if sample_count == 0:
-                        error = "No red alert samples were found in the past 24 hours."
+                        if restrict_24h:
+                            error = "No red alert samples were found in the past 24 hours."
+                        else:
+                            error = "No red alert samples were found."
                     else:
                         heart_rate_svg = _render_svg(
-                            _build_series(recent_rows, "heart_rate"),
+                            _build_series(displayed_rows, "heart_rate"),
                             "Heart Rate vs Time",
                             "#3366cc",
                         )
                         oxygen_svg = _render_svg(
-                            _build_series(recent_rows, "oxygen"),
+                            _build_series(displayed_rows, "oxygen"),
                             "Oxygen Level vs Time",
                             "#0f9d58",
                         )
@@ -244,6 +256,7 @@ def create_app():
             email=email,
             device_dsn=device_dsn,
             limit=limit,
+            restrict_24h=restrict_24h,
         )
 
     return app
