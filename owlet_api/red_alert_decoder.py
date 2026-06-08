@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 
 LOCAL_TIMEZONE = timezone.utc
+# Candidate embedded sample-start timestamps are accepted only within this
+# epoch window (roughly Nov 2023 through Mar 2030) to avoid false positives.
 MIN_VALID_SAMPLE_TIMESTAMP = 1700000000
 MAX_VALID_SAMPLE_TIMESTAMP = 1900000000
 

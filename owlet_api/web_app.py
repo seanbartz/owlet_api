@@ -252,7 +252,11 @@ def create_app():
 def run():
     """Run the Flask development server."""
     debug = os.environ.get("FLASK_DEBUG", "").strip() in ("1", "true", "True")
-    create_app().run(host="127.0.0.1", port=5000, debug=debug)
+    app = create_app()
+    app.logger.warning(
+        "Starting Flask development server. Use a production WSGI server in production."
+    )
+    app.run(host="127.0.0.1", port=5000, debug=debug)
 
 
 if __name__ == "__main__":
