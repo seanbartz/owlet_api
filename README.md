@@ -126,6 +126,7 @@ Start the app:
 $ owlet-web
  * Running on http://127.0.0.1:5000
 ```
+Set `FLASK_DEBUG=1` to run the local server in debug mode.
 
 Then open `http://127.0.0.1:5000` in your browser, submit your credentials, and
 view the graphs.

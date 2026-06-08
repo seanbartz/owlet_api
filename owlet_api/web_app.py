@@ -3,6 +3,7 @@
 
 from datetime import datetime, timedelta, timezone
 import math
+import os
 
 from flask import Flask, render_template_string, request
 from markupsafe import Markup
@@ -250,7 +251,8 @@ def create_app():
 
 def run():
     """Run the Flask development server."""
-    create_app().run(host="127.0.0.1", port=5000, debug=False)
+    debug = os.environ.get("FLASK_DEBUG", "").strip() in ("1", "true", "True")
+    create_app().run(host="127.0.0.1", port=5000, debug=debug)
 
 
 if __name__ == "__main__":

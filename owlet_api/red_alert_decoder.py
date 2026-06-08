@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 
 LOCAL_TIMEZONE = timezone.utc
+MIN_VALID_SAMPLE_TIMESTAMP = 1700000000
+MAX_VALID_SAMPLE_TIMESTAMP = 1900000000
 
 
 def parse_timestamp(value):
@@ -112,7 +114,7 @@ def decode_red_alert_summary(data, metadata=None):
     sample_start_utc = None
     if len(header) >= 8:
         candidate_timestamp = int.from_bytes(header[4:8], "big")
-        if 1700000000 <= candidate_timestamp <= 1900000000:
+        if MIN_VALID_SAMPLE_TIMESTAMP <= candidate_timestamp <= MAX_VALID_SAMPLE_TIMESTAMP:
             sample_start_utc = datetime.fromtimestamp(candidate_timestamp, timezone.utc)
 
     sample_index = 1
