@@ -6,7 +6,10 @@ import math
 
 from flask import Flask, render_template_string, request
 from markupsafe import Markup
+from requests.exceptions import RequestException
 
+from .owletexceptions import OwletPermanentCommunicationException
+from .owletexceptions import OwletTemporaryCommunicationException
 from .red_alert_history import decode_histories
 from .red_alert_history import download_history
 
@@ -218,10 +221,16 @@ def create_app():
                             "Oxygen Level vs Time",
                             "#0f9d58",
                         )
-                except Exception:
+                except OwletPermanentCommunicationException:
+                    error = "Login failed. Please verify your email and password."
+                except (OwletTemporaryCommunicationException, RequestException):
                     error = (
-                        "Unable to download red alert history right now. "
-                        "Please verify your credentials and try again."
+                        "Owlet service is temporarily unavailable. "
+                        "Please try again."
+                    )
+                except ValueError:
+                    error = (
+                        "Unable to decode downloaded red alert history data."
                     )
 
         return render_template_string(

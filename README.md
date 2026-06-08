@@ -129,6 +129,8 @@ $ owlet-web
 
 Then open `http://127.0.0.1:5000` in your browser, submit your credentials, and
 view the graphs.
+This command starts Flask's built-in development server for local use.
+For production deployment, use a WSGI server.
 
 ### Python
 You can take the [CLI implementation](owlet_api/cli.py) as reference. A basic example:
