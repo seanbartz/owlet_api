@@ -11,7 +11,8 @@ Two modes:
   live (--live)
       Poll HEART_RATE and OXYGEN_LEVEL every INTERVAL seconds and write
       samples to a CSV in real time so data is not lost on interruption.
-      Plots are generated when the run finishes.
+      Plots are generated when the run finishes.  Each run gets its own
+      timestamped output folder containing the CSV, JSON, and plots.
 
       Recording ends at the night-window end time by default, or immediately
       when you press Ctrl+C.  Use --duration to record for a fixed number of
@@ -115,6 +116,20 @@ def filter_rows_to_window(rows, start_utc, end_utc):
         if start_utc <= ts <= end_utc:
             filtered.append(row)
     return filtered
+
+
+def create_run_output_dir(prefix, run_started_at=None, tz=LOCAL_TIMEZONE):
+    """Create and return a timestamped output directory for one run."""
+    base = Path(prefix)
+    run_started_at = run_started_at or datetime.now(timezone.utc)
+    stamp = run_started_at.astimezone(tz).strftime("%Y-%m-%d_%H-%M-%S_%Z")
+    run_dir = base.parent / f"{base.name}_{stamp}"
+    suffix = 2
+    while run_dir.exists():
+        run_dir = base.parent / f"{base.name}_{stamp}_{suffix}"
+        suffix += 1
+    run_dir.mkdir(parents=True, exist_ok=False)
+    return run_dir
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +454,7 @@ def main():
     parser.add_argument(
         "--prefix",
         default="overnight_vitals",
-        help="Output filename prefix (default: overnight_vitals).",
+        help="Output filename prefix used inside a timestamped run folder.",
     )
     parser.add_argument(
         "--no-plot",
@@ -505,11 +520,12 @@ def main():
     # ------------------------------------------------------------------
     # Output paths
     # ------------------------------------------------------------------
-    prefix = Path(args.prefix)
-    csv_path = prefix.with_name(prefix.name + ".csv")
-    hr_plot_path = prefix.with_name(prefix.name + "_heart_rate.png")
-    ox_plot_path = prefix.with_name(prefix.name + "_oxygen.png")
-    raw_json_path = prefix.with_name(prefix.name + "_raw_history.json")
+    run_dir = create_run_output_dir(args.prefix)
+    prefix = Path(args.prefix).name
+    csv_path = run_dir / f"{prefix}.csv"
+    hr_plot_path = run_dir / f"{prefix}_heart_rate.png"
+    ox_plot_path = run_dir / f"{prefix}_oxygen.png"
+    raw_json_path = run_dir / f"{prefix}_raw_history.json"
 
     # ------------------------------------------------------------------
     # Collect data
@@ -604,6 +620,7 @@ def main():
         print("Skipping plots (--no-plot).")
 
     print(f"\nDone. {len(rows)} samples.")
+    print(f"  Output dir:   {run_dir}")
     print(f"  CSV:          {csv_path}")
     if not args.no_plot:
         print(f"  Heart rate:   {hr_plot_path}")
