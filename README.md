@@ -71,6 +71,88 @@ Fetch historical datapoints for a property such as `RED_ALERT_SUMMARY`:
 $ owlet email@email.org password history --history-property RED_ALERT_SUMMARY --limit 50 > red_alert_history.json
 ```
 
+### Overnight Vitals: Full-Night Heart Rate and Oxygen Plots
+
+`overnight_vitals.py` downloads and visualizes a whole night's heart rate and
+oxygen data in two modes:
+
+**History mode (default)** — fetches stored `RED_ALERT_SUMMARY` history from
+the Ayla cloud, filters it to the requested overnight window, writes a CSV,
+and saves PNG plots.  Because the Owlet stores historical summaries, you can
+run this *after* the night is over:
+
+```
+$ python3 overnight_vitals.py
+Night window: 2024-01-14 19:00 EST – 2024-01-15 08:00 EST
+Owlet email: email@email.org
+Owlet password:
+Downloading RED_ALERT_SUMMARY history (limit=200)…
+Wrote raw history: overnight_vitals_raw_history.json
+Wrote CSV: overnight_vitals.csv  (420 samples in night window)
+Saved plot: overnight_vitals_heart_rate.png
+Saved plot: overnight_vitals_oxygen.png
+
+Done. 420 samples.
+```
+
+Specify a different night with `--date` (the *morning* date that ends the session):
+
+```
+$ python3 overnight_vitals.py --date 2024-01-15
+```
+
+Override the exact window with `--start` / `--end`:
+
+```
+$ python3 overnight_vitals.py --start 2024-01-14T21:00 --end 2024-01-15T07:00
+```
+
+Reprocess a previously saved history file without calling the API:
+
+```
+$ python3 overnight_vitals.py --input-json overnight_vitals_raw_history.json --date 2024-01-15
+```
+
+**Live mode (`--live`)** — polls `HEART_RATE` and `OXYGEN_LEVEL` every 10 seconds
+throughout the night, appending each sample to the CSV as it arrives so that no
+data is lost if the script is interrupted.  Plots are generated when the run
+ends (either the morning end-time is reached or you press Ctrl+C):
+
+```
+$ python3 overnight_vitals.py --live --date 2024-01-15
+Night window: 2024-01-14 19:00 EST – 2024-01-15 08:00 EST
+Owlet email: email@email.org
+Owlet password:
+Live monitoring started. Polling every 10s until 08:00 EST.
+Writing samples to: overnight_vitals.csv
+  2024-01-14T19:00:12-05:00  HR=138 bpm  O2=98%
+  2024-01-14T19:00:22-05:00  HR=135 bpm  O2=99%
+  ...
+```
+
+All command-line options:
+
+| Option | Default | Description |
+|---|---|---|
+| `--date YYYY-MM-DD` | today | Morning date that ends the overnight session |
+| `--start DATETIME` | — | Override window start (ISO 8601, local time assumed) |
+| `--end DATETIME` | — | Override window end (ISO 8601, local time assumed) |
+| `--live` | off | Live-polling mode instead of history download |
+| `--interval N` | 10 | Seconds between live polls |
+| `--limit N` | 200 | Max `RED_ALERT_SUMMARY` datapoints to request (history mode) |
+| `--input-json FILE` | — | Decode a saved history JSON instead of calling the API |
+| `--prefix PREFIX` | `overnight_vitals` | Output filename prefix |
+| `--no-plot` | off | Skip PNG generation (headless environments) |
+| `--email`, `--password` | prompted | Owlet credentials |
+| `--device DSN` | all | Filter to a specific device DSN |
+
+Output files written by the script:
+
+* `<prefix>.csv` — per-sample readings
+* `<prefix>_raw_history.json` — raw API response (history mode only)
+* `<prefix>_heart_rate.png` — heart rate line chart
+* `<prefix>_oxygen.png` — oxygen level line chart
+
 ### Red Alert History and Plotting
 The most useful reverse-engineered workflow in this repo is now `RED_ALERT_SUMMARY` history decoding.
 
