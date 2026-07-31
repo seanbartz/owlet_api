@@ -9,10 +9,15 @@ Two modes:
       night window, write a CSV, and save PNG plots.
 
   live (--live)
-      Poll HEART_RATE and OXYGEN_LEVEL every INTERVAL seconds from device
-      start until end of the night window (or until Ctrl+C).  Samples are
-      appended to the CSV file in real time so data is not lost on
-      interruption, and plots are generated when the run finishes.
+      Poll HEART_RATE and OXYGEN_LEVEL every INTERVAL seconds and write
+      samples to a CSV in real time so data is not lost on interruption.
+      Plots are generated when the run finishes.  Each run gets its own
+      timestamped output folder containing the CSV, JSON, and plots.
+
+      Recording ends at the night-window end time by default, or immediately
+      when you press Ctrl+C.  Use --duration to record for a fixed number of
+      hours (fractions allowed) starting from now — this lets you record at
+      any time of day, not just overnight.
 
 Night window defaults to the previous evening (7 pm local) through the
 current morning (8 am local).  Use --date, or --start/--end to override.
@@ -26,6 +31,10 @@ Download last night's data and plot it::
 Download a specific night (night ending on 2024-01-15)::
 
     python3 overnight_vitals.py --date 2024-01-15
+
+Record live for 2.5 hours starting now::
+
+    python3 overnight_vitals.py --live --duration 2.5
 
 Run live all night from 9 pm to 7 am, polling every 10 seconds::
 
@@ -109,6 +118,20 @@ def filter_rows_to_window(rows, start_utc, end_utc):
     return filtered
 
 
+def create_run_output_dir(prefix, run_started_at=None, tz=LOCAL_TIMEZONE):
+    """Create and return a timestamped output directory for one run."""
+    base = Path(prefix)
+    run_started_at = run_started_at or datetime.now(timezone.utc)
+    stamp = run_started_at.astimezone(tz).strftime("%Y-%m-%d_%H-%M-%S_%Z")
+    run_dir = base.parent / f"{base.name}_{stamp}"
+    suffix = 2
+    while run_dir.exists():
+        run_dir = base.parent / f"{base.name}_{stamp}_{suffix}"
+        suffix += 1
+    run_dir.mkdir(parents=True, exist_ok=False)
+    return run_dir
+
+
 # ---------------------------------------------------------------------------
 # History mode
 # ---------------------------------------------------------------------------
@@ -166,8 +189,9 @@ def run_history_mode(email, password, limit, device_dsn,
 def run_live_mode(email, password, device_dsn, interval, end_utc, csv_path):
     """Poll HEART_RATE and OXYGEN_LEVEL every *interval* seconds until *end_utc*.
 
-    Samples are written to *csv_path* in real time.  Returns the collected
-    rows as a list of dicts.
+    If *end_utc* is ``None``, recording continues indefinitely until the user
+    presses Ctrl+C.  Samples are written to *csv_path* in real time.  Returns
+    the collected rows as a list of dicts.
     """
     api = OwletAPI()
     api.set_email(email)
@@ -182,13 +206,17 @@ def run_live_mode(email, password, device_dsn, interval, end_utc, csv_path):
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
 
-        print(f"Live monitoring started. Polling every {interval}s until "
-              f"{end_utc.astimezone(LOCAL_TIMEZONE).strftime('%H:%M %Z')}.")
+        end_str = (
+            end_utc.astimezone(LOCAL_TIMEZONE).strftime("%Y-%m-%d %H:%M %Z")
+            if end_utc is not None
+            else "Ctrl+C"
+        )
+        print(f"Live monitoring started. Polling every {interval}s until {end_str}.")
         print(f"Writing samples to: {csv_path}")
         print("Press Ctrl+C to stop early.")
 
         try:
-            while datetime.now(timezone.utc) < end_utc:
+            while end_utc is None or datetime.now(timezone.utc) < end_utc:
                 loop_start = time.time()
 
                 for device in api.get_devices():
@@ -410,12 +438,23 @@ def main():
         default=10,
         help="Live mode: seconds between polls (default: 10).",
     )
+    parser.add_argument(
+        "--duration",
+        type=float,
+        metavar="HOURS",
+        help=(
+            "Live mode: record for this many hours starting now "
+            "(fractions allowed, e.g. 1.5 for 90 minutes). "
+            "Overrides --start/--end/--date for determining the end time. "
+            "Lets you record at any time of day."
+        ),
+    )
 
     # Output
     parser.add_argument(
         "--prefix",
         default="overnight_vitals",
-        help="Output filename prefix (default: overnight_vitals).",
+        help="Output filename prefix used inside a timestamped run folder.",
     )
     parser.add_argument(
         "--no-plot",
@@ -428,7 +467,15 @@ def main():
     # ------------------------------------------------------------------
     # Resolve the night window
     # ------------------------------------------------------------------
-    if args.start and args.end:
+    if args.live and args.duration is not None:
+        # Duration mode: start now, end after the requested number of hours.
+        if args.duration <= 0:
+            print("ERROR: --duration must be a positive number of hours.",
+                  file=sys.stderr)
+            sys.exit(1)
+        start_utc = datetime.now(timezone.utc)
+        end_utc = start_utc + timedelta(hours=args.duration)
+    elif args.start and args.end:
         def _parse_local(value):
             try:
                 dt = datetime.fromisoformat(value)
@@ -457,20 +504,28 @@ def main():
 
     local_start = start_utc.astimezone(LOCAL_TIMEZONE)
     local_end = end_utc.astimezone(LOCAL_TIMEZONE)
-    print(
-        f"Night window: "
-        f"{local_start.strftime('%Y-%m-%d %H:%M %Z')} – "
-        f"{local_end.strftime('%Y-%m-%d %H:%M %Z')}"
-    )
+    if args.live and args.duration is not None:
+        print(
+            f"Recording window: {local_start.strftime('%Y-%m-%d %H:%M %Z')} "
+            f"for {args.duration:g} hour(s) "
+            f"(until {local_end.strftime('%H:%M %Z')})"
+        )
+    else:
+        print(
+            f"Night window: "
+            f"{local_start.strftime('%Y-%m-%d %H:%M %Z')} – "
+            f"{local_end.strftime('%Y-%m-%d %H:%M %Z')}"
+        )
 
     # ------------------------------------------------------------------
     # Output paths
     # ------------------------------------------------------------------
-    prefix = Path(args.prefix)
-    csv_path = prefix.with_name(prefix.name + ".csv")
-    hr_plot_path = prefix.with_name(prefix.name + "_heart_rate.png")
-    ox_plot_path = prefix.with_name(prefix.name + "_oxygen.png")
-    raw_json_path = prefix.with_name(prefix.name + "_raw_history.json")
+    run_dir = create_run_output_dir(args.prefix)
+    prefix = Path(args.prefix).name
+    csv_path = run_dir / f"{prefix}.csv"
+    hr_plot_path = run_dir / f"{prefix}_heart_rate.png"
+    ox_plot_path = run_dir / f"{prefix}_oxygen.png"
+    raw_json_path = run_dir / f"{prefix}_raw_history.json"
 
     # ------------------------------------------------------------------
     # Collect data
@@ -565,6 +620,7 @@ def main():
         print("Skipping plots (--no-plot).")
 
     print(f"\nDone. {len(rows)} samples.")
+    print(f"  Output dir:   {run_dir}")
     print(f"  CSV:          {csv_path}")
     if not args.no_plot:
         print(f"  Heart rate:   {hr_plot_path}")

@@ -149,6 +149,20 @@ class TestWriteCsv:
 
 
 # ---------------------------------------------------------------------------
+# create_run_output_dir
+# ---------------------------------------------------------------------------
+
+class TestCreateRunOutputDir:
+    def test_creates_timestamped_directory(self, tmp_path):
+        run_started_at = datetime(2024, 1, 15, 3, 4, 5, tzinfo=LOCAL_TZ)
+        run_dir = ov.create_run_output_dir(
+            tmp_path / "test_out", run_started_at=run_started_at)
+
+        assert run_dir == tmp_path / "test_out_2024-01-15_03-04-05_EST"
+        assert run_dir.exists()
+
+
+# ---------------------------------------------------------------------------
 # run_history_mode with --input-json
 # ---------------------------------------------------------------------------
 
@@ -292,6 +306,8 @@ class TestMain:
 
     def test_history_mode_writes_outputs(self, tmp_path, monkeypatch):
         prefix = str(tmp_path / "test_out")
+        run_dir = tmp_path / "test_out_run"
+        run_dir.mkdir()
         monkeypatch.setattr(sys, "argv", [
             "overnight_vitals.py",
             "--date", "2024-01-15",
@@ -302,6 +318,7 @@ class TestMain:
         ])
 
         with (
+            patch("overnight_vitals.create_run_output_dir", return_value=run_dir),
             patch("overnight_vitals.run_history_mode",
                   return_value=(self._BASE_ROWS, self._BASE_HISTORIES)),
             patch("overnight_vitals.write_csv") as mock_write_csv,
@@ -310,10 +327,15 @@ class TestMain:
             ov.main()
 
         mock_write_csv.assert_called_once()
+        assert mock_write_csv.call_args.args[0] == run_dir / "test_out.csv"
         assert mock_plot.call_count == 2
+        assert mock_plot.call_args_list[0].args[4] == run_dir / "test_out_heart_rate.png"
+        assert mock_plot.call_args_list[1].args[4] == run_dir / "test_out_oxygen.png"
 
     def test_history_mode_no_data_exits_nonzero(self, tmp_path, monkeypatch):
         prefix = str(tmp_path / "empty_out")
+        run_dir = tmp_path / "empty_out_run"
+        run_dir.mkdir()
         monkeypatch.setattr(sys, "argv", [
             "overnight_vitals.py",
             "--date", "2024-01-15",
@@ -323,6 +345,7 @@ class TestMain:
         ])
 
         with (
+            patch("overnight_vitals.create_run_output_dir", return_value=run_dir),
             patch("overnight_vitals.run_history_mode",
                   return_value=([], self._BASE_HISTORIES)),
             pytest.raises(SystemExit) as exc_info,
@@ -333,6 +356,8 @@ class TestMain:
 
     def test_no_plot_flag_skips_plotting(self, tmp_path, monkeypatch):
         prefix = str(tmp_path / "noplot_out")
+        run_dir = tmp_path / "noplot_out_run"
+        run_dir.mkdir()
         monkeypatch.setattr(sys, "argv", [
             "overnight_vitals.py",
             "--date", "2024-01-15",
@@ -343,6 +368,7 @@ class TestMain:
         ])
 
         with (
+            patch("overnight_vitals.create_run_output_dir", return_value=run_dir),
             patch("overnight_vitals.run_history_mode",
                   return_value=(self._BASE_ROWS, self._BASE_HISTORIES)),
             patch("overnight_vitals.write_csv"),
@@ -354,6 +380,8 @@ class TestMain:
 
     def test_explicit_start_end_overrides_date(self, tmp_path, monkeypatch):
         prefix = str(tmp_path / "custom_window_out")
+        run_dir = tmp_path / "custom_window_out_run"
+        run_dir.mkdir()
         monkeypatch.setattr(sys, "argv", [
             "overnight_vitals.py",
             "--start", "2024-01-14T21:00",
@@ -372,6 +400,7 @@ class TestMain:
             return [], []
 
         with (
+            patch("overnight_vitals.create_run_output_dir", return_value=run_dir),
             patch("overnight_vitals.run_history_mode", side_effect=fake_run_history),
             pytest.raises(SystemExit),  # no data → exit 1
         ):
@@ -383,6 +412,8 @@ class TestMain:
 
     def test_live_mode_called_when_flag_set(self, tmp_path, monkeypatch):
         prefix = str(tmp_path / "live_out")
+        run_dir = tmp_path / "live_out_run"
+        run_dir.mkdir()
         monkeypatch.setattr(sys, "argv", [
             "overnight_vitals.py",
             "--live",
@@ -394,6 +425,7 @@ class TestMain:
         ])
 
         with (
+            patch("overnight_vitals.create_run_output_dir", return_value=run_dir),
             patch("overnight_vitals.run_live_mode",
                   return_value=self._BASE_ROWS) as mock_live,
             patch("overnight_vitals.plot_metric"),
@@ -407,6 +439,8 @@ class TestMain:
         json_file = tmp_path / "hist.json"
         json_file.write_text(json.dumps(histories))
         prefix = str(tmp_path / "json_out")
+        run_dir = tmp_path / "json_out_run"
+        run_dir.mkdir()
 
         monkeypatch.setattr(sys, "argv", [
             "overnight_vitals.py",
@@ -417,6 +451,7 @@ class TestMain:
         ])
 
         with (
+            patch("overnight_vitals.create_run_output_dir", return_value=run_dir),
             patch("overnight_vitals.run_history_mode",
                   return_value=(self._BASE_ROWS, histories)) as mock_hist,
             patch("overnight_vitals.write_csv"),
